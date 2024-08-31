@@ -4,12 +4,12 @@ from pymongo import MongoClient
 from bson.objectid import ObjectId
 
 app = Flask(__name__)
-CORS(app,origins="https://localhost:5173")  # To allow cross-origin requests
+CORS(app,origins="https://localhost:5173")  
 
 # Connect to MongoDB
 client = MongoClient('mongodb://localhost:27017/')
-db = client.user  # Replace 'mydatabase' with your database name
-collection = db.user_details  # Replace 'mycollection' with your collection name
+db = client.user  
+collection = db.user_details
 
 # Create a new item
 @app.route('/items', methods=['POST'])
