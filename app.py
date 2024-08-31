@@ -1,60 +1,81 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, json, request
+from flask_sqlalchemy import SQLAlchemy
+from flask_marshmallow import Marshmallow
 from flask_cors import CORS
-from pymongo import MongoClient
-from bson.objectid import ObjectId
 
 app = Flask(__name__)
-CORS(app,origins="https://localhost:5173")  
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://root:pr151776@localhost/Prash'
+app.config['SQLALCHEMY_TRACK_MODIFICATION'] = False
 
-# Connect to MongoDB
-client = MongoClient('mongodb://localhost:27017/')
-db = client.user  
-collection = db.user_details
+db = SQLAlchemy()
+db.init_app(app)
+ma = Marshmallow(app)
+CORS(app)
 
-# Create a new item
-@app.route('/items', methods=['POST'])
-def create_item():
-    data = request.json
-    result = collection.insert_one(data)
-    return jsonify(str(result.inserted_id)), 201
+class User(db.Model):
+    __tablename__ = "users"
+    id = db.Column(db.Integer,primary_key=True)
+    name = db.Column(db.String(50))
+    email = db.Column(db.String(50))
 
-# Get all items
-@app.route('/items', methods=['GET'])
-def get_items():
-    items = []
-    for item in collection.find():
-        item['_id'] = str(item['_id'])
-        items.append(item)
-    return jsonify(items), 200
+    def __init__(self,name,email):
+        self.name = name
+        self.email = email
 
-# Get a single item by ID
-@app.route('/items/<id>', methods=['GET'])
-def get_item(id):
-    item = collection.find_one({"_id": ObjectId(id)})
-    if item:
-        item['_id'] = str(item['_id'])
-        return jsonify(item), 200
-    else:
-        return jsonify({'error': 'Item not found'}), 404
+class UserSchema(ma.Schema):
+    class Meta:
+        fields = ("id","name","email")
 
-# Update an item
-@app.route('/items/<id>', methods=['PUT'])
-def update_item(id):
-    data = request.json
-    result = collection.update_one({"_id": ObjectId(id)}, {"$set": data})
-    if result.modified_count > 0:
-        return jsonify({'success': 'Item updated'}), 200
-    else:
-        return jsonify({'error': 'Item not found'}), 404
+user_schema = UserSchema()
+users_schema = UserSchema(many=True)
 
-# Delete an item
-@app.route('/items/<id>', methods=['DELETE'])
-def delete_item(id):
-    result = collection.delete_one({"_id": ObjectId(id)})
-    if result.deleted_count > 0:
-        return jsonify({'success': 'Item deleted'}), 200
-    else:
-        return jsonify({'error': 'Item not found'}), 404
+@app.before_request
+def table():
+    db.create_all()
 
-if __name__ == '__main__':
+@app.route("/")
+def home():
+    return "Hello World"
+
+@app.route("/user",methods=['GET'])
+def allUser():
+    users = User.query.all()
+    res = users_schema.dump(users)
+    return jsonify(res)
+
+@app.route("/listuser/<id>",methods=['GET'])
+def listUser(id):
+    users = User.query.get(id)
+    return user_schema.jsonify(users)
+
+@app.route("/addUser",methods=['POST'])
+def addUser():
+    name = request.json['name']
+    email = request.json['email']
+
+    user = User(name,email)
+    db.session.add(user)
+    db.session.commit()
+
+    return user_schema.jsonify(user)
+
+@app.route("/updateuser/<id>",methods=['PUT'])
+def updateUser(id):
+    user = User.query.get(id)
+
+    user.name = request.json['name']
+    user.email = request.json['email']
+
+    db.session.commit()
+    return user_schema.jsonify(user)
+
+@app.route("/deleteuser/<id>",methods=['DELETE'])
+def deleteUser(id):
+    user = User.query.get(id)
+
+    db.session.delete(user)
+    db.session.commit()
+    return user_schema.jsonify(user)
+
+if __name__ == "__main__":
     app.run(debug=True)
